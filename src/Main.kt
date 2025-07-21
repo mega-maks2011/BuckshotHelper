@@ -2,7 +2,6 @@ import javax.swing.*
 import java.awt.*
 import javax.swing.border.EmptyBorder
 import java.util.prefs.Preferences
-import kotlin.random.Random
 
 class BuckshotHelperGUI : JFrame("Buckshot Helper") {
 
