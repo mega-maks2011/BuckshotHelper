@@ -1,3 +1,7 @@
+<img width="339" height="448" alt="image" src="https://github.com/user-attachments/assets/caf81e10-b767-4e07-b24c-984f70e9ae39" />
+<img width="533" height="202" alt="image" src="https://github.com/user-attachments/assets/14d82d6f-fb24-4663-a429-b0a2b4d259b5" />
+
+
 # En
 # BuckshotHelper
 ## BuckshotHelper is an auxiliary program designed to enhance the gameplay experience in Buckshot Roulette by helping players keep track of and remember bullet types (live or blank). This program provides a simple and intuitive interface to quickly input and view bullet information, reducing mental load and allowing you to focus on game strategy.
@@ -17,3 +21,4 @@
 
 ## Лицензия
 ### Этот проект лицензирован по лицензии MIT. Подробности смотрите в файле LICENSE.
+
