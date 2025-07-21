@@ -2,33 +2,57 @@ import javax.swing.*
 import java.awt.*
 import javax.swing.border.EmptyBorder
 import java.util.prefs.Preferences
+import kotlin.random.Random
 
 class BuckshotHelperGUI : JFrame("Buckshot Helper") {
 
     data class BulletVisualState(var knownType: Boolean?, var isFired: Boolean)
+
+    // Data class для сохранения состояния для Undo
+    private data class AppState(
+        val allPossibleChambers: MutableList<MutableList<Boolean>>,
+        val currentPossibleChambers: MutableList<MutableList<Boolean>>,
+        val visualChamber: MutableList<BulletVisualState>,
+        val messageText: String
+    )
+
     private val shellLineupInput = JTextField("3/2", 10)
     private val submitRoundButton = JButton()
     private val shellKnowledgeInput = JTextField("", 10)
     private val submitShellKnowledgeButton = JButton()
+
     private val currentShellLineupLabel = JLabel("[]")
     private val liveShellChanceLabel = JLabel()
     private val blankShellChanceLabel = JLabel()
     private val liveShellsRemainingLabel = JLabel()
     private val blankShellsRemainingLabel = JLabel()
+
     private val liveFiredButton = JButton()
     private val blankCycledButton = JButton()
+
     private val messageLabel = JLabel()
+
+    // Пункт меню для Undo
+    private val undoMenuItem = JMenuItem()
+
     private var allPossibleChambers: MutableList<MutableList<Boolean>> = mutableListOf()
     private var currentPossibleChambers: MutableList<MutableList<Boolean>> = mutableListOf()
     private var visualChamber: MutableList<BulletVisualState> = mutableListOf()
+
+    // Стек для Undo
+    private val undoStack: MutableList<AppState> = mutableListOf()
+
     private val BACKGROUND = Color(30, 33, 36)
     private val TEXT = Color(220, 221, 222)
     private val BORDER = Color(70, 73, 79)
     private val ACCENT_PRIMARY = Color(114, 137, 218)
     private val ACCENT_GREEN = Color(87, 242, 135)
     private val ACCENT_RED = Color(237, 66, 69)
+
     private var currentLanguage: String = "en"
+
     private val prefs: Preferences = Preferences.userNodeForPackage(BuckshotHelperGUI::class.java)
+
     private val translations = mapOf(
         "en" to mapOf(
             "windowTitle" to "Buckshot Helper",
@@ -61,7 +85,8 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             "englishMenuItem" to "English",
             "russianMenuItem" to "Russian",
             "aboutMenuItem" to "About",
-            "aboutMessage" to "Buckshot Helper v1.2\n\nThis application helps players track shell probabilities in Buckshot Roulette.\n\nDeveloped by Gemini AI and M998__."
+            "aboutMessage" to "<html>Buckshot Helper v1.2.1<br><br>This application helps players track shell probabilities in Buckshot Roulette.<br><br>Developed by Gemini AI and M998__.</html>",
+            "undoButton" to "Undo"
         ),
         "ru" to mapOf(
             "windowTitle" to "Buckshot Helper",
@@ -94,15 +119,18 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             "englishMenuItem" to "English",
             "russianMenuItem" to "Русский",
             "aboutMenuItem" to "О программе",
-            "aboutMessage" to "Buckshot Helper v1.2\n\nЭто приложение помогает игрокам отслеживать вероятности патронов в Buckshot Roulette.\n\nРазработано Gemini AI и M998__."
+            "aboutMessage" to "<html>Buckshot Helper v1.2.1<br><br>Это приложение помогает игрокам отслеживать вероятности патронов в Buckshot Roulette.<br><br>Разработано Gemini AI и M998__.</html>",
+            "undoButton" to "Отменить"
         )
     )
 
     init {
         try {
             UIManager.setLookAndFeel("javax.swing.plaf.nimbus.NimbusLookAndFeel")
-        } catch (e: Exception) {
-            e.printStackTrace() }
+        }
+        catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         defaultCloseOperation = EXIT_ON_CLOSE
         layout = BorderLayout(0, 0)
@@ -113,8 +141,10 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             val iconPath = "assets/icon.png"
             val iconImage = Toolkit.getDefaultToolkit().getImage(iconPath)
             setIconImage(iconImage)
-        } catch (e: Exception) {
-            System.err.println("Error loading icon: ${e.message}")}
+        }
+        catch (e: Exception) {
+            System.err.println("Error loading icon: ${e.message}")
+        }
 
         val savedX = prefs.getInt("window_x", -1)
         val savedY = prefs.getInt("window_y", -1)
@@ -124,8 +154,10 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
 
         if (savedX != -1 && savedY != -1) {
             bounds = Rectangle(savedX, savedY, savedWidth, savedHeight)
-        } else {
-            setLocationRelativeTo(null)}
+        }
+        else {
+            setLocationRelativeTo(null)
+        }
         currentLanguage = savedLanguage
 
         addWindowListener(object : java.awt.event.WindowAdapter() {
@@ -137,9 +169,15 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
                 prefs.put("language_code", currentLanguage)
                 prefs.flush()
                 super.windowClosing(e)
-            }})
+            }
+        })
 
         val menuBar = JMenuBar()
+        menuBar.background = BACKGROUND
+
+        // Добавляем кнопку Undo в JMenuBar
+        menuBar.add(undoMenuItem)
+
         val settingsMenu = JMenu()
         val englishMenuItem = JMenuItem()
         val russianMenuItem = JMenuItem()
@@ -151,12 +189,15 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             val currentTranslation = translations[currentLanguage] ?: translations["ru"]!!
             val icon = try {
                 val originalImage = Toolkit.getDefaultToolkit().getImage("assets/icon.png")
-                val scaledImage = originalImage.getScaledInstance(64, 64, Image.SCALE_SMOOTH) // НОВОЕ: Изменение размера изображения
+                val scaledImage = originalImage.getScaledInstance(64, 64, Image.SCALE_SMOOTH)
                 ImageIcon(scaledImage)
-            } catch (e: Exception) {
+            }
+            catch (e: Exception) {
                 System.err.println("Error loading or scaling icon for About dialog: ${e.message}")
-                null }
-            JOptionPane.showMessageDialog(this, currentTranslation["aboutMessage"], currentTranslation["aboutMenuItem"], JOptionPane.INFORMATION_MESSAGE, icon) }
+                null
+            }
+            JOptionPane.showMessageDialog(this, currentTranslation["aboutMessage"], currentTranslation["aboutMenuItem"], JOptionPane.INFORMATION_MESSAGE, icon)
+        }
 
         settingsMenu.add(englishMenuItem)
         settingsMenu.add(russianMenuItem)
@@ -207,38 +248,51 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         mainPanel.add(actionButtonsPanel)
         mainPanel.add(Box.createVerticalStrut(10))
 
+        // Удалена панель для кнопки Undo из mainPanel
+        // Кнопка Undo теперь находится в JMenuBar
+
         messageLabel.alignmentX = CENTER_ALIGNMENT
         messageLabel.setHorizontalAlignment(SwingConstants.CENTER)
         mainPanel.add(messageLabel)
         add(mainPanel, BorderLayout.CENTER)
+
         applyColorsToComponents()
         setLanguage(currentLanguage)
+
         submitRoundButton.addActionListener { startNewRound() }
         submitShellKnowledgeButton.addActionListener { handleShellKnowledge() }
         liveFiredButton.addActionListener { handleShotConfirmation(true) }
         blankCycledButton.addActionListener { handleShotConfirmation(false) }
+        undoMenuItem.addActionListener { undoLastAction() } // Слушатель для пункта меню Undo
+
         updateDisplay()
         updateButtonStates()
-        pack()}
+
+        pack()
+    }
 
     fun createAndShowGUI() {
         isVisible = true
-        messageLabel.text = translations[currentLanguage]?.get("messageInitial") ?: "Enter shell lineup (e.g., 3/2)."}
+        messageLabel.text = translations[currentLanguage]?.get("messageInitial") ?: "Enter shell lineup (e.g., 3/2)."
+    }
 
     private fun setLanguage(langCode: String) {
         currentLanguage = langCode
         val currentTranslation = translations[currentLanguage] ?: translations["en"]!!
 
         title = currentTranslation["windowTitle"] ?: "Buckshot Helper"
-        (jMenuBar.components[0] as JMenu).text = currentTranslation["settingsMenu"]
-        ((jMenuBar.components[0] as JMenu).menuComponents[0] as JMenuItem).text = currentTranslation["englishMenuItem"]
-        ((jMenuBar.components[0] as JMenu).menuComponents[1] as JMenuItem).text = currentTranslation["russianMenuItem"]
-        ((jMenuBar.components[0] as JMenu).menuComponents[3] as JMenuItem).text = currentTranslation["aboutMenuItem"]
+        // ИСПРАВЛЕНИЕ: jMenuBar.components[0] теперь undoMenuItem, settingsMenu находится по индексу 1
+        (jMenuBar.components[1] as JMenu).text = currentTranslation["settingsMenu"]
+        // Приведение типов для JMenu.menuComponents
+        ((jMenuBar.components[1] as JMenu).menuComponents[0] as JMenuItem).text = currentTranslation["englishMenuItem"]
+        ((jMenuBar.components[1] as JMenu).menuComponents[1] as JMenuItem).text = currentTranslation["russianMenuItem"]
+        ((jMenuBar.components[1] as JMenu).menuComponents[3] as JMenuItem).text = currentTranslation["aboutMenuItem"]
 
         submitRoundButton.text = currentTranslation["submitRoundButton"]
         submitShellKnowledgeButton.text = currentTranslation["submitShellKnowledgeButton"]
         liveFiredButton.text = currentTranslation["liveFiredButton"]
         blankCycledButton.text = currentTranslation["blankCycledButton"]
+        undoMenuItem.text = currentTranslation["undoButton"] // Установка текста для пункта меню Undo
 
         liveShellChanceLabel.text = currentTranslation["liveShellChance"] + " ?"
         blankShellChanceLabel.text = currentTranslation["blankShellChance"] + " ?"
@@ -249,12 +303,14 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         updateDisplay()
         updateButtonStates()
 
-        prefs.put("language_code", currentLanguage)}
+        prefs.put("language_code", currentLanguage)
+    }
 
     private fun applyColorsToComponents() {
         contentPane.background = BACKGROUND
         rootPane.background = BACKGROUND
-        background = BACKGROUND // Устанавливаем фон для самого JFrame
+        background = BACKGROUND
+        jMenuBar.background = BACKGROUND
 
         UIManager.put("Panel.background", BACKGROUND)
         UIManager.put("Label.foreground", TEXT)
@@ -265,6 +321,10 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         UIManager.put("Button.background", ACCENT_PRIMARY)
         UIManager.put("Button.foreground", Color.WHITE)
         UIManager.put("Button.border", BorderFactory.createEmptyBorder(8, 15, 8, 15))
+        // Цвета для JMenuItem
+        UIManager.put("MenuItem.background", BACKGROUND)
+        UIManager.put("MenuItem.foreground", TEXT)
+        UIManager.put("Menu.foreground", TEXT) // Для текста "Settings"
 
         shellLineupInput.background = BACKGROUND
         shellLineupInput.foreground = TEXT
@@ -278,6 +338,8 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         submitShellKnowledgeButton.background = ACCENT_PRIMARY
         liveFiredButton.background = ACCENT_GREEN
         blankCycledButton.background = ACCENT_RED
+        // undoMenuItem не нуждается в явной установке цвета, так как он наследует от UIManager.put("MenuItem.background", ...)
+
         messageLabel.foreground = TEXT
         currentShellLineupLabel.foreground = TEXT
         liveShellChanceLabel.foreground = TEXT
@@ -288,13 +350,45 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         SwingUtilities.updateComponentTreeUI(this)
 
         for (panel in listOf(contentPane, rootPane.contentPane, shellLineupInput.parent, submitRoundButton.parent, shellKnowledgeInput.parent, submitShellKnowledgeButton.parent, currentShellLineupLabel.parent, liveShellChanceLabel.parent, blankShellChanceLabel.parent, liveShellsRemainingLabel.parent, blankShellsRemainingLabel.parent, liveFiredButton.parent, blankCycledButton.parent, messageLabel.parent)) {
-            panel.background = BACKGROUND}
+            panel.background = BACKGROUND
+        }
 
         revalidate()
         repaint()
-        updateDisplay()}
+    }
+
+    // Сохраняет текущее состояние приложения в стек undoStack
+    private fun saveState() {
+        // Создаем глубокие копии изменяемых списков
+        val chambersCopy = allPossibleChambers.map { it.toMutableList() }.toMutableList()
+        val currentChambersCopy = currentPossibleChambers.map { it.toMutableList() }.toMutableList()
+        val visualChamberCopy = visualChamber.map { it.copy() }.toMutableList() // Используем data class copy
+
+        undoStack.add(AppState(chambersCopy, currentChambersCopy, visualChamberCopy, messageLabel.text))
+        // Ограничиваем размер стека, чтобы не потреблять слишком много памяти
+        if (undoStack.size > 20) { // Например, сохраняем последние 20 состояний
+            undoStack.removeAt(0)
+        }
+    }
+
+    // Отменяет последнее действие
+    private fun undoLastAction() {
+        if (undoStack.isNotEmpty()) {
+            val prevState = undoStack.removeAt(undoStack.lastIndex) // Получаем последнее состояние
+
+            // Восстанавливаем состояние
+            allPossibleChambers = prevState.allPossibleChambers.map { it.toMutableList() }.toMutableList()
+            currentPossibleChambers = prevState.currentPossibleChambers.map { it.toMutableList() }.toMutableList()
+            visualChamber = prevState.visualChamber.map { it.copy() }.toMutableList()
+            messageLabel.text = prevState.messageText
+
+            updateDisplay()
+            updateButtonStates()
+        }
+    }
 
     private fun startNewRound() {
+        saveState() // Сохраняем состояние перед изменением
 
         val input = shellLineupInput.text.trim()
         val parts = input.split("/").mapNotNull { it.toIntOrNull() }
@@ -302,7 +396,8 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
 
         if (parts.size != 2) {
             messageLabel.text = currentTranslation["errorInvalidFormat"]!!
-            return}
+            return
+        }
 
         val live = parts[0]
         val blank = parts[1]
@@ -310,13 +405,16 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
 
         if (totalBullets == 0) {
             messageLabel.text = currentTranslation["errorTotalBulletsZero"]!!
-            return}
+            return
+        }
         if (live < 0 || blank < 0) {
             messageLabel.text = currentTranslation["errorBulletCountsNegative"]!!
-            return}
+            return
+        }
         if (totalBullets > 10) {
             messageLabel.text = currentTranslation["errorMaxBullets"]!!
-            return}
+            return
+        }
 
         allPossibleChambers = generatePermutations(live, blank)
         currentPossibleChambers = allPossibleChambers.map { it.toMutableList() }.toMutableList()
@@ -325,18 +423,23 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
 
         messageLabel.text = String.format(currentTranslation["roundReady"]!!, live, blank)
         updateDisplay()
-        updateButtonStates()}
+        updateButtonStates()
+    }
 
     private fun handleShotConfirmation(wasLive: Boolean) {
+        saveState() // Сохраняем состояние перед изменением
+
         val currentTranslation = translations[currentLanguage] ?: translations["en"]!!
         if (currentPossibleChambers.isEmpty()) {
             messageLabel.text = currentTranslation["errorNoPossibleCombinations"]!!
-            return}
+            return
+        }
 
         val firstUnfiredIndex = visualChamber.indexOfFirst { !it.isFired }
         if (firstUnfiredIndex != -1) {
             visualChamber[firstUnfiredIndex].isFired = true
-            visualChamber[firstUnfiredIndex].knownType = wasLive}
+            visualChamber[firstUnfiredIndex].knownType = wasLive
+        }
 
         messageLabel.text = String.format(currentTranslation["confirmedShot"]!!, if (wasLive) currentTranslation["bulletTypeLive"] else currentTranslation["bulletTypeBlank"])
         currentPossibleChambers = filterChambersByShot(currentPossibleChambers, wasLive)
@@ -348,18 +451,24 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             allPossibleChambers.clear()
             currentPossibleChambers.clear()
             visualChamber.clear()
-            updateButtonStates()}}
+            updateButtonStates()
+        }
+    }
 
     private fun handleShellKnowledge() {
+        saveState() // Сохраняем состояние перед изменением
+
         val currentTranslation = translations[currentLanguage] ?: translations["en"]!!
         if (currentPossibleChambers.isEmpty()) {
             messageLabel.text = currentTranslation["errorNoPossibleCombinations"]!!
-            return}
+            return
+        }
 
         val input = shellKnowledgeInput.text.trim().lowercase()
         if (input.length < 2) {
             messageLabel.text = currentTranslation["errorInvalidFormat"]!!
-            return}
+            return
+        }
 
         val indexChar = input.substring(0, input.length - 1)
         val typeChar = input.last()
@@ -369,10 +478,12 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
 
         if (relativeIndex == null || relativeIndex <= 0) {
             messageLabel.text = currentTranslation["errorInvalidBulletNumber"]!!
-            return}
+            return
+        }
         if (typeChar != 'l' && typeChar != 'b') {
             messageLabel.text = currentTranslation["errorInvalidBulletType"]!!
-            return}
+            return
+        }
 
         var unfiredCount = 0
         var actualIndex = -1
@@ -381,15 +492,20 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
                 unfiredCount++
                 if (unfiredCount == relativeIndex) {
                     actualIndex = i
-                    break}}}
+                    break
+                }
+            }
+        }
 
         if (actualIndex == -1) {
             messageLabel.text = String.format(currentTranslation["errorBulletDoesNotExist"]!!, relativeIndex)
-            return}
+            return
+        }
 
         if (visualChamber[actualIndex].isFired) {
             messageLabel.text = String.format(currentTranslation["errorBulletAlreadyFired"]!!, relativeIndex)
-            return}
+            return
+        }
 
         currentPossibleChambers = filterChambersByPhone(currentPossibleChambers, actualIndex + 1, typeIsLive)
 
@@ -400,14 +516,16 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             visualChamber.clear()
             updateDisplay()
             updateButtonStates()
-            return}
+            return
+        }
 
         visualChamber[actualIndex].knownType = typeIsLive
 
         messageLabel.text = String.format(currentTranslation["shellKnowledgeConfirmed"]!!, relativeIndex, if (typeIsLive) currentTranslation["bulletTypeLive"] else currentTranslation["bulletTypeBlank"])
         shellKnowledgeInput.text = ""
         updateDisplay()
-        updateButtonStates()}
+        updateButtonStates()
+    }
 
     private fun updateDisplay() {
         val (liveProb, blankProb) = calculateProbabilities(currentPossibleChambers)
@@ -425,25 +543,31 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         val visualString = StringBuilder("[")
         if (visualChamber.isEmpty()) {
             visualString.append("Empty")
-        } else {
+        }
+        else {
             for (i in visualChamber.indices) {
                 val bulletState = visualChamber[i]
                 val char = when {
                     bulletState.knownType == true -> "L"
                     bulletState.knownType == false -> "B"
-                    else -> "R"}
-
-                val displayChar = char
+                    else -> "R"
+                }
 
                 val grayColor = "#A0A0A0"
                 if (bulletState.isFired) {
-                    visualString.append("<font color='$grayColor'>$displayChar</font>")
-                } else {
-                    visualString.append(displayChar)}
+                    visualString.append("<font color='$grayColor'>$char</font>")
+                }
+                else {
+                    visualString.append(char)
+                }
                 if (i < visualChamber.size - 1) {
-                    visualString.append(", ")}}}
+                    visualString.append(", ")
+                }
+            }
+        }
         visualString.append("]")
-        currentShellLineupLabel.text = "<html>$visualString</html>"}
+        currentShellLineupLabel.text = "<html>$visualString</html>"
+    }
 
     private fun updateButtonStates() {
         val hasPossibleChambers = currentPossibleChambers.isNotEmpty()
@@ -456,36 +580,48 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         blankCycledButton.isEnabled = hasPossibleChambers && !allBulletsFired
 
         submitRoundButton.isEnabled = true
-        shellLineupInput.isEnabled = true}
+        shellLineupInput.isEnabled = true
+
+        undoMenuItem.isEnabled = undoStack.isNotEmpty() // Кнопка Undo активна, если есть состояния для отмены
+    }
 
     private fun generatePermutations(live: Int, blank: Int): MutableList<MutableList<Boolean>> {
         val result = mutableSetOf<List<Boolean>>()
         fun backtrack(current: MutableList<Boolean>, l: Int, b: Int) {
             if (l == 0 && b == 0) {
                 result.add(current.toList())
-                return}
+                return
+            }
             if (l > 0) {
                 current.add(true)
                 backtrack(current, l - 1, b)
-                current.removeAt(current.lastIndex)}
+                current.removeAt(current.lastIndex)
+            }
             if (b > 0) {
                 current.add(false)
                 backtrack(current, l, b - 1)
-                current.removeAt(current.lastIndex)}}
+                current.removeAt(current.lastIndex)
+            }
+        }
         backtrack(mutableListOf(), live, blank)
-        return result.map { it.toMutableList() }.toMutableList()}
+        return result.map { it.toMutableList() }.toMutableList()
+    }
 
     private fun calculateProbabilities(possibleChambers: MutableList<MutableList<Boolean>>): Pair<Double, Double> {
         if (possibleChambers.isEmpty()) {
-            return Pair(0.0, 0.0)}
+            return Pair(0.0, 0.0)
+        }
         var liveCount = 0
         for (chamber in possibleChambers) {
             if (chamber.isNotEmpty() && chamber[0]) {
-                liveCount++}}
+                liveCount++
+            }
+        }
         val totalChambers = possibleChambers.size
         val liveProb = liveCount.toDouble() / totalChambers
         val blankProb = 1.0 - liveProb
-        return Pair(liveProb, blankProb)}
+        return Pair(liveProb, blankProb)
+    }
 
     private fun filterChambersByShot(chambers: MutableList<MutableList<Boolean>>, wasLive: Boolean): MutableList<MutableList<Boolean>> {
         val filtered = mutableListOf<MutableList<Boolean>>()
@@ -493,24 +629,33 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             if (chamber.isNotEmpty() && chamber[0] == wasLive) {
                 val newChamber = chamber.toMutableList()
                 newChamber.removeAt(0)
-                filtered.add(newChamber)}}
-        return filtered}
+                filtered.add(newChamber)
+            }
+        }
+        return filtered
+    }
 
     private fun filterChambersByPhone(chambers: MutableList<MutableList<Boolean>>, index: Int, typeIsLive: Boolean): MutableList<MutableList<Boolean>> {
         val filtered = mutableListOf<MutableList<Boolean>>()
         val actualIndex = index - 1
         for (chamber in chambers) {
             if (chamber.size > actualIndex && chamber[actualIndex] == typeIsLive) {
-                filtered.add(chamber)}}
-        return filtered}}
+                filtered.add(chamber)
+            }
+        }
+        return filtered
+    }
+}
 
 fun main() {
     try {
         UIManager.setLookAndFeel("javax.swing.plaf.nimbus.NimbusLookAndFeel")
-    } catch (e: Exception) {
-        e.printStackTrace()}
+    }
+    catch (e: Exception) {
+        e.printStackTrace()
+    }
 
     SwingUtilities.invokeLater {
-        BuckshotHelperGUI().createAndShowGUI()}}
-
-// Hello?
+        BuckshotHelperGUI().createAndShowGUI()
+    }
+}
