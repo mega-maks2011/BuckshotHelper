@@ -8,7 +8,7 @@
 ## BuckshotHelper is an auxiliary program designed to enhance the gameplay experience in Buckshot Roulette by helping players keep track of and remember bullet types (live or blank). This program provides a simple and intuitive interface to quickly input and view bullet information, reducing mental load and allowing you to focus on game strategy.
 
 # Installation
-## 1. Install [Java](https://www.oracle.com/java/technologies/downloads /) versions 8 or higher
+## 1. Install [Java](https://www.oracle.com/java/technologies/downloads/) versions 8 or higher
 ## 2. Move the program to the Programm Files folder and run the shortcut or executable jar file
 
 ## License
