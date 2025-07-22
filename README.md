@@ -15,7 +15,7 @@
 ### This project is licensed under the MIT License. See the LICENSE file for details.
 
 # Additional information
-### The developer is 14 years old
+### The developer is 14 years old (as of 2025)
 ### Wrote the code with [neural network](https://en.wikipedia.org/wiki/Neural_network) but sometimes I added some parts of the code myself.
 #### The program is completely free and has an open source, I do not ask anything from users
 
@@ -31,6 +31,6 @@
 ### Этот проект лицензирован по лицензии MIT. Подробности смотрите в файле LICENSE.
 
 # Доп информация
-### Разрабочику 14 лет
+### Разрабочику 14 лет (на момент 2025 года)
 ### Писал код с [нейросетью](https://ru.wikipedia.org/wiki/%D0%9D%D0%B5%D0%B9%D1%80%D0%BE%D0%BD%D0%BD%D0%B0%D1%8F_%D1%81%D0%B5%D1%82%D1%8C), но иногда сам дописывал некоторые части кода
 #### Программа полностью бесплатная и имеет открытый код, от пользователей я ничего не прошу
