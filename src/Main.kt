@@ -74,7 +74,7 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             "englishMenuItem" to "English",
             "russianMenuItem" to "Russian",
             "aboutMenuItem" to "About",
-            "aboutMessage" to "<html>Buckshot Helper v1.2.2<br><br>This application helps players track shell probabilities in Buckshot Roulette.<br><br>Developed by Gemini AI and M998__.</html>",
+            "aboutMessage" to "<html>Buckshot Helper v1.2.2<br><br>This application helps players track shell probabilities in Buckshot Roulette.<br><br>Developed by Gemini AI.</html>",
             "undoButton" to "Undo"
         ),
         "ru" to mapOf(
@@ -108,7 +108,7 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             "englishMenuItem" to "English",
             "russianMenuItem" to "Русский",
             "aboutMenuItem" to "О программе",
-            "aboutMessage" to "<html>Buckshot Helper v1.2.2<br><br>Это приложение помогает игрокам отслеживать вероятности патронов в Buckshot Roulette.<br><br>Разработано Gemini AI и M998__.</html>",
+            "aboutMessage" to "<html>Buckshot Helper v1.2.2<br><br>Это приложение помогает игрокам отслеживать вероятности патронов в Buckshot Roulette.<br><br>Разработано Gemini AI.</html>",
             "undoButton" to "Отменить"
         )
     )
