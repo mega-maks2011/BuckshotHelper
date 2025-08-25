@@ -18,7 +18,11 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
     private val submitRoundButton = JButton()
     private val shellKnowledgeInput = JTextField("", 10)
     private val submitShellKnowledgeButton = JButton()
-    private val currentShellLineupLabel = JLabel("[]")
+
+    private val lineupPanel = JLayeredPane()
+    private val currentShellLineupLabel = JLabel()
+    private val arrowLabel = JLabel("↑")
+
     private val liveShellChanceLabel = JLabel()
     private val blankShellChanceLabel = JLabel()
     private val liveShellsRemainingLabel = JLabel()
@@ -74,7 +78,7 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             "englishMenuItem" to "English",
             "russianMenuItem" to "Russian",
             "aboutMenuItem" to "About",
-            "aboutMessage" to "<html>Buckshot Helper v1.2.2<br><br>This application helps players track shell probabilities in Buckshot Roulette.<br><br>Developed by Gemini AI and M998__.</html>",
+            "aboutMessage" to "<html>Buckshot Helper v1.2.3<br><br>This application helps players track shell probabilities in Buckshot Roulette.<br><br>Developed by Gemini AI and M998__.</html>",
             "undoButton" to "Undo"
         ),
         "ru" to mapOf(
@@ -106,9 +110,9 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
             "roundOver" to "Раунд завершен! Все патроны выстрелены. Начните новый раунд.",
             "settingsMenu" to "Настройки",
             "englishMenuItem" to "English",
-            "russianMenuItem" to "Русский",
+            "russianMenuItem" to "Russian",
             "aboutMenuItem" to "О программе",
-            "aboutMessage" to "<html>Buckshot Helper v1.2.2<br><br>Это приложение помогает игрокам отслеживать вероятности патронов в Buckshot Roulette.<br><br>Разработано Gemini AI и M998__.</html>",
+            "aboutMessage" to "<html>Buckshot Helper v1.2.3<br><br>This application helps players track shell probabilities in Buckshot Roulette.<br><br>Developed by Gemini AI and M998__.</html>",
             "undoButton" to "Отменить"
         )
     )
@@ -199,13 +203,13 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         mainPanel.background = BACKGROUND
         mainPanel.border = EmptyBorder(10, 10, 10, 10)
 
-        val lineupPanel = JPanel(FlowLayout(FlowLayout.CENTER, 5, 0))
-        lineupPanel.background = BACKGROUND
-        lineupPanel.alignmentX = CENTER_ALIGNMENT
+        val lineupInputPanel = JPanel(FlowLayout(FlowLayout.CENTER, 5, 0))
+        lineupInputPanel.background = BACKGROUND
+        lineupInputPanel.alignmentX = CENTER_ALIGNMENT
         shellLineupInput.columns = 5
-        lineupPanel.add(shellLineupInput)
-        lineupPanel.add(submitRoundButton)
-        mainPanel.add(lineupPanel)
+        lineupInputPanel.add(shellLineupInput)
+        lineupInputPanel.add(submitRoundButton)
+        mainPanel.add(lineupInputPanel)
         mainPanel.add(Box.createVerticalStrut(15))
 
         val knowledgePanel = JPanel(FlowLayout(FlowLayout.CENTER, 5, 0))
@@ -221,7 +225,15 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         infoPanel.background = BACKGROUND
         infoPanel.layout = BoxLayout(infoPanel, BoxLayout.Y_AXIS)
         infoPanel.alignmentX = CENTER_ALIGNMENT
-        infoPanel.add(currentShellLineupLabel)
+
+        // Добавляем JLayeredPane, а не JLabel напрямую
+        infoPanel.add(lineupPanel)
+        // Задаем размер для JLayeredPane, чтобы его компоненты могли быть видны
+        lineupPanel.preferredSize = Dimension(200, 30)
+        lineupPanel.add(currentShellLineupLabel, JLayeredPane.DEFAULT_LAYER)
+        lineupPanel.add(arrowLabel, JLayeredPane.PALETTE_LAYER)
+        arrowLabel.foreground = Color.WHITE
+
         infoPanel.add(liveShellChanceLabel)
         infoPanel.add(blankShellChanceLabel)
         infoPanel.add(liveShellsRemainingLabel)
@@ -330,6 +342,10 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         blankShellChanceLabel.foreground = TEXT
         liveShellsRemainingLabel.foreground = TEXT
         blankShellsRemainingLabel.foreground = TEXT
+
+        // Увеличиваем размер шрифта для стрелки
+        val font = currentShellLineupLabel.font
+        arrowLabel.font = font.deriveFont(font.size2D * 1.5f)
 
         SwingUtilities.updateComponentTreeUI(this)
 
@@ -513,39 +529,59 @@ class BuckshotHelperGUI : JFrame("Buckshot Helper") {
         liveShellChanceLabel.text = "${currentTranslation["liveShellChance"]} ${"%.2f".format(liveProb * 100)}%"
         blankShellChanceLabel.text = "${currentTranslation["blankShellChance"]} ${"%.2f".format(blankProb * 100)}%"
 
-        val liveRemaining = currentPossibleChambers.firstOrNull()?.count { it == true } ?: 0
-        val blankRemaining = currentPossibleChambers.firstOrNull()?.count { it == false } ?: 0
+        val liveRemaining = currentPossibleChambers.firstOrNull()?.count { it } ?: 0
+        val blankRemaining = currentPossibleChambers.firstOrNull()?.count { !it } ?: 0
 
         liveShellsRemainingLabel.text = "${currentTranslation["liveShellsRemaining"]} $liveRemaining"
         blankShellsRemainingLabel.text = "${currentTranslation["blankShellsRemaining"]} $blankRemaining"
 
-        val visualString = StringBuilder("[")
+        // Обновляем текст на лейбле патронника
+        val visualBullets = StringBuilder()
         if (visualChamber.isEmpty()) {
-            visualString.append("Empty")
-        }
-        else {
+            visualBullets.append("Empty")
+        } else {
             for (i in visualChamber.indices) {
                 val bulletState = visualChamber[i]
-                val char = when {
-                    bulletState.knownType == true -> "L"
-                    bulletState.knownType == false -> "B"
+                val char = when (bulletState.knownType) {
+                    true -> "L"
+                    false -> "B"
                     else -> "?"
                 }
-
-                val grayColor = "#A0A0A0"
-                if (bulletState.isFired) {
-                    visualString.append("<font color='$grayColor'>$char</font>")
-                }
-                else {
-                    visualString.append(char)
-                }
+                visualBullets.append(char)
                 if (i < visualChamber.size - 1) {
-                    visualString.append(", ")
+                    visualBullets.append(", ")
                 }
             }
         }
-        visualString.append("]")
-        currentShellLineupLabel.text = "<html>$visualString</html>"
+        currentShellLineupLabel.text = "[${visualBullets}]"
+        currentShellLineupLabel.setBounds(0, 0, lineupPanel.width, 20)
+
+        // Пересчитываем положение стрелки
+        val unfiredIndex = visualChamber.indexOfFirst { !it.isFired }
+        if (unfiredIndex != -1) {
+            val fontMetrics = currentShellLineupLabel.getFontMetrics(currentShellLineupLabel.font)
+            val paddingString = StringBuilder("[")
+            for (i in 0 until unfiredIndex) {
+                paddingString.append(
+                    when (visualChamber[i].knownType) {
+                        visualChamber[i].knownType -> "L"
+                        visualChamber[i].knownType -> "B"
+                        else -> "?"
+                    }
+                )
+                paddingString.append(", ")
+            }
+            val xPosition = fontMetrics.stringWidth(paddingString.toString())
+
+            val yPosition = currentShellLineupLabel.height - 10 // Размещаем стрелку под лейблом с небольшим смещением вверх
+            arrowLabel.setBounds(xPosition, yPosition, arrowLabel.preferredSize.width, arrowLabel.preferredSize.height)
+            arrowLabel.isVisible = true
+        } else {
+            arrowLabel.isVisible = false
+        }
+
+        lineupPanel.revalidate()
+        lineupPanel.repaint()
     }
 
     private fun updateButtonStates() {
